@@ -12,6 +12,7 @@ scatter(ys, xs, astpect_ratio=1)
 ##
 trips = CSV.File("C:/Users/adria/Desktop/Programowanie/python/6_semester/mathematics_for_industry/old/trips.txt") |> DataFrame
 utrips = [["IC", "ZKA IC"], ["TLK", "ZKA TLK"], ["EIC"], ["EIP"]]
+st = CSV.File("C:/Users/adria/Desktop/Programowanie/python/6_semester/mathematics_for_industry/old/stop_times.txt") |> DataFrame
 
 RX = Vector{Vector{Vector{Float64}}}(undef, length(utrips))
 RY = Vector{Vector{Vector{Float64}}}(undef, length(utrips))
@@ -54,7 +55,7 @@ end
 ##
 scatter(ys, xs, legend=false, aspect_ratio=1)
 plot(aspect_ratio=1, legend=false)
-plot!(bord[:,1], bord[:,2], c=:black)
+# plot!(bord[:,1], bord[:,2], c=:black)
 scatter!(ys, xs, ms=2.3, markerstrokewidth=0, c=:gray)
 for j in eachindex(RX)
     X = RX[j]
@@ -100,7 +101,7 @@ p = plot( ylim=(48.8,55.2), xlim=(13.7,24.3),dpi=1000,
 legendfontsize=15,legend=:bottomleft,size=(900,800),ascpect_ratio=1.5,
 tickfontsize=15,labelfontsize=15,xlabel="długość geograficzna[∘]",ylabel="szerekość geograficzna[∘]",legend_font_pointsize=4)
 
-p = plot!(bord[:,1], bord[:,2], c=:black,label=false)
+# p = plot!(bord[:,1], bord[:,2], c=:black,label=false)
 for i in 1:4
     intense = intR[i]
     m = maximum(intense)
@@ -115,7 +116,7 @@ plot!(title="Sieć połączeń PKP InterCity",titlefontsize=20)
 p = scatter!(ys, xs, label="stacje",markerstrokewidth=0,c=:gray60,ms=2.5)
 
 
-#savefig(p, "graf1")
+savefig(p, "graf1")
 
 
 
