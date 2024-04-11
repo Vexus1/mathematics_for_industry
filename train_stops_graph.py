@@ -5,7 +5,8 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from IPython.display import HTML
+from icecream import ic
+from scipy.interpolate import interp1d
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -22,7 +23,6 @@ df_edges = df_stop_times_sorted[['trip_id', 'stop_id']].assign(
 ).dropna()
 
 edges = list(zip(df_edges['stop_id'], df_edges['next_stop_id'].astype(np.int64)))
-
 G = nx.Graph()
 for index, row in unique_stops.iterrows():
     G.add_node(row['stop_id'], pos=(row['stop_lon'], row['stop_lat']), label=row['stop_name'])
@@ -31,27 +31,59 @@ for edge in edges:
     if edge[0] in G.nodes and edge[1] in G.nodes:
         G.add_edge(edge[0], edge[1])
 
-start_station = unique_stops[unique_stops['stop_name'] == "Wrocław Główny"]['stop_id'].values[0]
-end_station = unique_stops[unique_stops['stop_name'] == "Warszawa Centralna"]['stop_id'].values[0]
-path = nx.shortest_path(G, source=start_station, target=end_station)
+route_stations = [
+    "Wrocław Główny",
+    "Oława",
+    "Brzeg",
+    "Opole Główne",
+    "Lubliniec",
+    "Częstochowa Stradom",
+    "Częstochowa",
+    "Radomsko",
+    "Piotrków Trybunalski",
+    "Koluszki",
+    "Skierniewice",
+    "Żyrardów",
+    "Warszawa Zachodnia",
+    "Warszawa Centralna"
+]
+route_id = []
+for station in route_stations:
+    route_id.append(unique_stops[unique_stops['stop_name'] == station]['stop_id'].values[0])
+
 pos = {node: (data['pos'][0], data['pos'][1]) for node, data in G.nodes(data=True)}
-
-
 plt.close()
 fig, ax = plt.subplots(figsize=(10, 8))
+travel_times_minutes = [i for i in range(12,25)]  
+total_travel_time = sum(travel_times_minutes)
+time_points = np.cumsum([0] + travel_times_minutes)
+distance_points = np.arange(len(route_id))
+time_to_distance_interp = interp1d(time_points, distance_points, bounds_error=False, fill_value="extrapolate")
+def update_route_with_interpolation(frame_number, total_frames, G, pos, route_id, route_stations, total_travel_time):
+    current_time = (frame_number / total_frames) * total_travel_time
+    current_position = time_to_distance_interp(current_time)
+    current_station_index = int(np.floor(current_position))
+    next_station_index = current_station_index + 1 if current_station_index + 1 < len(route_id) else current_station_index
+    current_station_pos = pos[route_id[current_station_index]]
+    next_station_pos = pos[route_id[next_station_index]]
 
-def update(num, G, pos, path, path_edges):
+    interp_ratio = current_position - current_station_index
+    interp_pos = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(next_station_pos)
     ax.clear()
     nx.draw(G, pos, ax=ax, node_size=20, alpha=0.3, node_color="blue", edge_color="gray")
-    nx.draw_networkx_nodes(G, pos, nodelist=path[:num+1], node_size=50, node_color="red")
-    nx.draw_networkx_edges(G, pos, edgelist=path_edges[:num], width=2, edge_color="red")
-    labels = {start_station: 'Wrocław Główny', end_station: 'Warszawa Centralna'}
-    if num < len(path):
-        labels[path[num]] = G.nodes[path[num]]['label']
-    nx.draw_networkx_labels(G, pos, labels=labels, font_color="green")
-    ax.set_title("Animacja podróży pociągu: Wrocław Główny -> Warszawa Centralna")
+    ax.plot(*interp_pos, 'ro')  # Pociąg jako czerwony punkt
+    
+    labels = {route_id[current_station_index]: route_stations[current_station_index]}
+    nx.draw_networkx_labels(G, pos, labels=labels, font_color="black")
+    ax.set_title(f"Animacja podróży pociągu: {route_stations[0]} -> {route_stations[-1]}")
     plt.axis('off')
 
-path_edges = list(zip(path, path[1:]))  #
-ani = FuncAnimation(fig, update, frames=len(path) + 5, fargs=(G, pos, path, path_edges), interval=1000, repeat=False)
-ani.save('outputs/train_journey_animation.gif', writer='imagemagick', fps=1)
+total_frames = 300
+interval_ms = (total_travel_time / total_frames) 
+ani_route_with_interpolation = FuncAnimation(fig, update_route_with_interpolation, 
+                                            frames=total_frames, 
+                                            fargs=(total_frames, G, pos, route_id, route_stations, total_travel_time),
+                                            interval=1, repeat=False)
+
+# plt.show()
+ani_route_with_interpolation.save('outputs/train_journey_real_route_animation_interpolated.gif', writer='imagemagick', fps=30)
