@@ -10,6 +10,11 @@ from scipy.interpolate import interp1d
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+node_color = 'skyblue'  # Kolor węzłów
+edge_color = 'lightgrey'  # Kolor krawędzi
+train_color = 'red'  # Kolor pociągu
+route_color = 'green'  # Kolor trasy
+
 df_trips = pd.read_csv('inputs/trips.txt')  
 df_stop_times = pd.read_csv('inputs/stop_times.txt')
 df_stops = pd.read_csv('inputs/stops.txt')
@@ -42,39 +47,47 @@ for station in route_stations:
 
 # do zmiany ponieważ dane na temat pozycji wieszchołków są w pliku stops
 pos = {node: (data['pos'][0], data['pos'][1]) for node, data in G.nodes(data=True)}
-pos_alt = df_stops['stop_id', 'stop_lat', 'stop_lon'].to_dict
+# pos_alt = df_stops['stop_id', 'stop_lat', 'stop_lon'].to_dict
 # ic(len(pos.keys()))
 fig, ax = plt.subplots(figsize=(10, 8))
-travel_times_minutes = [i for i in range(12,25)]  
+travel_times_minutes = [18, 7, 20, 30, 21, 5, 24, 26, 23, 18, 10, 19, 5]
 total_travel_time = sum(travel_times_minutes)
 time_points = np.cumsum([0] + travel_times_minutes)
 distance_points = np.arange(len(route_id))
 time_to_distance_interp = interp1d(time_points, distance_points, bounds_error=False, fill_value="extrapolate")
-def update_route_with_interpolation(frame_number, total_frames, G, pos, route_id, route_stations, total_travel_time):
+def update_route_with_interpolation_and_path(frame_number, total_frames, G, pos, route_id, route_stations, total_travel_time):
+    ax.clear()
+    nx.draw(G, pos, ax=ax, node_size=20, alpha=0.3, node_color="blue", edge_color="gray")
+
     current_time = (frame_number / total_frames) * total_travel_time
     current_position = time_to_distance_interp(current_time)
     current_station_index = int(np.floor(current_position))
     next_station_index = current_station_index + 1 if current_station_index + 1 < len(route_id) else current_station_index
-    current_station_pos = pos[route_id[current_station_index]]
-    next_station_pos = pos[route_id[next_station_index]]
-
-    interp_ratio = current_position - current_station_index
-    interp_pos = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(next_station_pos)
-    ax.clear()
-    nx.draw(G, pos, ax=ax, node_size=20, alpha=0.3, node_color="blue", edge_color="gray")
-    ax.plot(*interp_pos, 'ro')  # Pociąg jako czerwony punkt
     
+    if next_station_index < len(route_id):
+        current_station_pos = pos[route_id[current_station_index]]
+        next_station_pos = pos[route_id[next_station_index]]
+        interp_ratio = current_position - current_station_index
+        interp_pos = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(next_station_pos)
+        ax.plot(*interp_pos, 'ro', markersize=12)  # Pociąg jako czerwony punkt
+
+    route_path = route_id[:next_station_index + 1]
+    route_edges = list(zip(route_path[:-1], route_path[1:]))
+    nx.draw_networkx_edges(G, pos, edgelist=route_edges, edge_color="green", width=2)
+
     labels = {route_id[current_station_index]: route_stations[current_station_index]}
     nx.draw_networkx_labels(G, pos, labels=labels, font_color="black")
+    
     ax.set_title(f"Animacja podróży pociągu: {route_stations[0]} -> {route_stations[-1]}")
     plt.axis('off')
 
-total_frames = 300
-interval_ms = (total_travel_time / total_frames) 
-ani_route_with_interpolation = FuncAnimation(fig, update_route_with_interpolation, 
-                                            frames=total_frames, 
-                                            fargs=(total_frames, G, pos, route_id, route_stations, total_travel_time),
-                                            interval=1, repeat=False)
+total_frames = 1000
+interval_ms = (total_travel_time / total_frames) * 1000  
+
+ani_route_with_interpolation_and_path = FuncAnimation(fig, update_route_with_interpolation_and_path, 
+                                                      frames=total_frames, 
+                                                      fargs=(total_frames, G, pos, route_id, route_stations, total_travel_time),
+                                                      interval=interval_ms, repeat=False)
 
 # plt.show()
-ani_route_with_interpolation.save('outputs/train_journey_real_route_animation_interpolated.gif', writer='imagemagick', fps=30)
+ani_route_with_interpolation_and_path.save('outputs/train_journey_real_route_animation_interpolated.gif', writer='imagemagick', fps=30)

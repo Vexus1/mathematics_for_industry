@@ -60,7 +60,7 @@ def load_data() -> tuple[DataFrame, DataFrame, DataFrame]:
     stops = pd.read_csv('inputs/stops.txt')
     stop_times = pd.read_csv('inputs/stop_times.txt')
     trips = pd.read_csv('inputs/trips.txt')
-    trace = pd.read_csv('traces/wroclaw_warsaw')
+    trace = pd.read_csv('traces/wroclaw_warsaw.csv')
     return stops, stop_times, trips, trace
 
 if __name__ == '__main__':
