@@ -18,9 +18,9 @@ route_stations = [
     "Warszawa Zachodnia",
     "Warszawa Centralna"
 ]
-
-header = "Station Name\n"
+travel_times_minutes = [18, 7, 20, 30, 21, 5, 24, 26, 23, 18, 10, 19, 5, 0]
+header = "Station Name,Travel Time\n"
 with open('wroclaw_warsaw.csv', 'w', encoding='utf-8-sig') as file:
     file.write(header)
-    for station in route_stations:
-        file.write(f"{station}\n")
+    for station, travel_time in zip(route_stations, travel_times_minutes): 
+        file.write(f"{station},{travel_time}\n")

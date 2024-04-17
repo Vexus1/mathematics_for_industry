@@ -21,7 +21,6 @@ df_stops = pd.read_csv('inputs/stops.txt')
 df_transfers = pd.read_csv('inputs/transfers.txt')
 
 unique_stops = df_stops[['stop_id', 'stop_name', 'stop_lat', 'stop_lon']]
-# stop_id_to_name = unique_stops.set_index('stop_id')['stop_name'].to_dict()
 df_stop_times_sorted = df_stop_times.sort_values(by=['trip_id', 'stop_sequence'])
 ic(type(unique_stops))
 ic(type(df_stop_times_sorted))
@@ -45,9 +44,7 @@ route_id = []
 for station in route_stations:
     route_id.append(unique_stops[unique_stops['stop_name'] == station]['stop_id'].values[0])
 
-# do zmiany ponieważ dane na temat pozycji wieszchołków są w pliku stops
 pos = {node: (data['pos'][0], data['pos'][1]) for node, data in G.nodes(data=True)}
-# pos_alt = df_stops['stop_id', 'stop_lat', 'stop_lon'].to_dict
 # ic(len(pos.keys()))
 fig, ax = plt.subplots(figsize=(10, 8))
 travel_times_minutes = [18, 7, 20, 30, 21, 5, 24, 26, 23, 18, 10, 19, 5]
