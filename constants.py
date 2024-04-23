@@ -1,5 +1,5 @@
-NODE_COLOR = 'skyblue'
-EDGE_COLOR = 'lightgrey'
+NODE_COLOR = 'blue'
+EDGE_COLOR = 'grey'
 TRAIN_COLOR = 'red'
 ROUTE_COLOR = 'green'
 FONT_COLOR = "black"

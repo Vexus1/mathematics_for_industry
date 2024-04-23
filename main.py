@@ -25,9 +25,10 @@ class TrainSimulation:
     def __post_init__(self) -> None:
         # self.G = nx.Graph()
         self.create_nodes()
-        self.node_pos = self.node_postion()
         self.route_stations = self.trace_names()
         self.route_id = self.train_path()
+        self.node_pos = self.node_postion()
+        self.fig, self.ax = self.create_graph()
 
     def transform_data(self) -> tuple[DataFrame, DataFrame]:
         stops = self.stops[['stop_id', 'stop_name',
@@ -84,7 +85,7 @@ class TrainSimulation:
         fig, ax = plt.subplots(figsize=(10, 8))
         ax.clear()
         nx.draw(self.G, self.node_pos, ax=ax, node_size=20,
-                alpha=0.3, node_color="blue", edge_color=EDGE_COLOR)
+                alpha=0.3, node_color=NODE_COLOR, edge_color=EDGE_COLOR)
         return fig, ax
     
     def update_graph(self, next_station_index: int) -> None:
@@ -104,28 +105,31 @@ class TrainSimulation:
         plt.axis('off')
 
     def interp_func(self, frame_number: int, ax: Any) -> None:
+        ax.clear()  # Czyści aktualną oś przed rysowaniem nowej klatki
+        nx.draw(self.G, self.node_pos, ax=ax, node_size=20,
+        alpha=0.3, node_color=NODE_COLOR, edge_color=EDGE_COLOR)
         current_time = (frame_number / FRAMES) * self.travel_time_sum()
         current_position = self.total_travel_time()(current_time)
         current_station_index = int(np.floor(current_position))
         if current_station_index + 1 < len(self.route_id):
             next_station_index = current_station_index + 1
         else: 
-            current_station_index = len(self.route_id) - 1  # Aby uniknąć indeksowania poza zakresem
+            current_station_index = len(self.route_id) - 1 
             next_station_index = current_station_index
         current_station_pos = self.node_pos[self.route_id[current_station_index]]
         next_station_pos = self.node_pos[self.route_id[next_station_index]]
         interp_ratio = current_position - current_station_index
         interp_pos = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(next_station_pos)
-        ax.plot(*interp_pos, 'ro', markersize=12)  # Rysuj pociąg
+        ax.plot(*interp_pos, 'ro', markersize=12)  #CIAPĄG
         self.update_graph(next_station_index)
         self.stations_title(ax, current_station_index)
 
     def create_anim(self) -> FuncAnimation:
-        fig, ax = self.create_graph()
         interval_ms = (self.travel_time_sum() / FRAMES) * 1000
-        animation = FuncAnimation(fig, self.interp_func, fargs=(ax,),
+        animation = FuncAnimation(self.fig, self.interp_func, fargs=(self.ax,),
                                 frames=FRAMES, interval=interval_ms, repeat=False)
         return animation
+
 
 def load_data() -> tuple[DataFrame, DataFrame, DataFrame, DataFrame]:
     stops = pd.read_csv('inputs/stops.txt')
