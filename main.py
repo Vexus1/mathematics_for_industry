@@ -68,12 +68,14 @@ class TrainSimulation:
         return position
     
     def travel_time(self) -> list[int]:
-        return self.trace['Travel Time'].astype(int)
+        real_time = self.trace[self.trace['Travel Time'] != 0]
+        return real_time['Travel Time'].astype(int).tolist() 
     
     def travel_time_sum(self) -> int:
         return sum(self.travel_time())
 
     def total_travel_time(self) -> interp1d:
+        # ic(self.travel_time())
         time_points = np.cumsum([0] + self.travel_time())
         distance_points = np.arange(len(self.route_id))
         time_to_distance = interp1d(time_points, distance_points,
@@ -105,22 +107,20 @@ class TrainSimulation:
         plt.axis('off')
 
     def interp_func(self, frame_number: int, ax: Any) -> None:
-        ax.clear()  # Czyści aktualną oś przed rysowaniem nowej klatki
+        ax.clear() 
         nx.draw(self.G, self.node_pos, ax=ax, node_size=20,
-        alpha=0.3, node_color=NODE_COLOR, edge_color=EDGE_COLOR)
+                alpha=0.3, node_color=NODE_COLOR, edge_color=EDGE_COLOR) 
         current_time = (frame_number / FRAMES) * self.travel_time_sum()
         current_position = self.total_travel_time()(current_time)
         current_station_index = int(np.floor(current_position))
         if current_station_index + 1 < len(self.route_id):
             next_station_index = current_station_index + 1
-        else: 
-            current_station_index = len(self.route_id) - 1 
-            next_station_index = current_station_index
-        current_station_pos = self.node_pos[self.route_id[current_station_index]]
-        next_station_pos = self.node_pos[self.route_id[next_station_index]]
-        interp_ratio = current_position - current_station_index
-        interp_pos = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(next_station_pos)
-        ax.plot(*interp_pos, 'ro', markersize=12)  #CIAPĄG
+        if next_station_index < len(self.route_id):
+            current_station_pos = self.node_pos[self.route_id[current_station_index]]
+            next_station_pos = self.node_pos[self.route_id[next_station_index]]
+            interp_ratio = current_position - current_station_index
+            interp_pos = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(next_station_pos)
+            ax.plot(*interp_pos, 'ro', markersize=12) 
         self.update_graph(next_station_index)
         self.stations_title(ax, current_station_index)
 
