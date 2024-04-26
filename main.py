@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import pandas as pd
 import numpy as np
@@ -17,16 +17,13 @@ from constants import *
 class TrainSimulation:
     stops: DataFrame 
     stop_times: DataFrame 
-    trips: DataFrame 
-    trace: DataFrame
-    G: nx.Graph = field(default_factory=nx.Graph)
-    node_pos: dict = field(init=False)
+    traces: list[DataFrame]
 
     def __post_init__(self) -> None:
-        # self.G = nx.Graph()
+        self.G = nx.Graph()
         self.create_nodes()
-        self.route_stations = self.trace_names()
-        self.route_id = self.train_path()
+        self.routes_stations = self.traces_names()
+        self.routes_id = self.trains_paths()
         self.node_pos = self.node_postion()
         self.fig, self.ax = self.create_graph()
 
@@ -52,36 +49,45 @@ class TrainSimulation:
             if edge[0] in self.G.nodes and edge[1] in self.G.nodes:
                 self.G.add_edge(edge[0], edge[1])
     
-    def trace_names(self) -> list[str]:
-        return self.trace['Station Name'].tolist()
+    def traces_names(self) -> list[list[str]]:
+        return [trace['Station Name'].tolist() for trace in self.traces]
     
-    def train_path(self) -> list[np.int64]:
-        route_id = []
-        for station in self.route_stations:
-            temp = self.stops[self.stops['stop_name'] == station]['stop_id'].values[0]
-            route_id.append(temp)
-        return route_id
+    def trains_paths(self) -> list[list[np.int64]]:
+        routes_id = []
+        for route in self.routes_stations:
+            route_id = []
+            for station in route:
+                temp = self.stops[self.stops['stop_name'] == station]['stop_id'].values[0]
+                route_id.append(temp)
+            routes_id.append(route_id)
+        return routes_id
 
     def node_postion(self) -> dict[any, tuple]:
         position = {node: (data['pos'][0], data['pos'][1])
                     for node, data in self.G.nodes(data=True)}
         return position
     
-    def travel_time(self) -> list[int]:
-        real_time = self.trace[self.trace['Travel Time'] != 0]
-        return real_time['Travel Time'].astype(int).tolist() 
+    def travels_times(self) -> list[list[int]]:
+        times = []
+        for trace in self.traces:
+            real_time = trace[trace['Travel Time'] != 0]
+            real_time = real_time['Travel Time'].astype(int).tolist() 
+            times.append(real_time)
+        return times
     
-    def travel_time_sum(self) -> int:
-        return sum(self.travel_time())
+    def travels_times_sum(self) -> list[int]:
+        return [sum(travel) for travel in self.travels_times()]
 
-    def total_travel_time(self) -> interp1d:
-        # ic(self.travel_time())
-        time_points = np.cumsum([0] + self.travel_time())
-        distance_points = np.arange(len(self.route_id))
-        time_to_distance = interp1d(time_points, distance_points,
-                                    bounds_error=False,
-                                    fill_value="extrapolate")
-        return time_to_distance
+    def total_travels_times(self) -> list[interp1d]:
+        total = []
+        for i in range(len(self.traces)):
+            time_points = np.cumsum([0] + self.travels_times()[i])
+            distance_points = np.arange(len(self.routes_id[i]))
+            time_to_distance = interp1d(time_points, distance_points,
+                                        bounds_error=False,
+                                        fill_value="extrapolate")
+            total.append(time_to_distance)
+        return total
 
     def create_graph(self) -> tuple[plt.Figure, Any]:
         fig, ax = plt.subplots(figsize=(10, 8))
@@ -91,52 +97,55 @@ class TrainSimulation:
         return fig, ax
     
     def update_graph(self, next_station_index: int) -> None:
-        route_path = self.route_id [:next_station_index + 1]
-        route_edges = list(zip(route_path[:-1], route_path[1:]))
-        nx.draw_networkx_edges(self.G, self.node_pos, 
-                               edgelist=route_edges,
-                               edge_color=TRAVEL_COLOR, width=2)
+        for i in range(len(self.traces)):
+            route_path = self.routes_id[i][:next_station_index + 1]
+            route_edges = list(zip(route_path[:-1], route_path[1:]))
+            nx.draw_networkx_edges(self.G, self.node_pos, 
+                                edgelist=route_edges,
+                                edge_color=TRAVEL_COLOR, width=2)
 
-    def stations_title(self, ax: Any, curr_station_index: int) -> None:
-        label_key = self.route_id[curr_station_index]
-        label_value = self.route_stations[curr_station_index]
-        labels = {label_key: label_value}
-        nx.draw_networkx_labels(self.G, self.node_pos,
-                                labels=labels, font_color=FONT_COLOR)
-        ax.set_title(f"Animacja podróży pociągu: {self.route_stations[0]} -> {self.route_stations[-1]}")
-        plt.axis('off')
+    # def stations_title(self, ax: Any, curr_station_index: int) -> None:
+    #     for i in range(len(self.traces)):
+    #         label_key = self.routes_id[i][curr_station_index]
+    #         label_value = self.routes_stations[i][curr_station_index]
+    #         labels = {label_key: label_value}
+    #         nx.draw_networkx_labels(self.G, self.node_pos,
+    #                                 labels=labels, font_color=FONT_COLOR)
+    #         ax.set_title(f"Animacja podróży pociągów")
+    #         plt.axis('off')
 
     def interp_func(self, frame_number: int, ax: Any) -> None:
         ax.clear() 
         nx.draw(self.G, self.node_pos, ax=ax, node_size=20,
                 alpha=0.3, node_color=NODE_COLOR, edge_color=EDGE_COLOR) 
-        current_time = (frame_number / FRAMES) * self.travel_time_sum()
-        current_position = self.total_travel_time()(current_time)
-        current_station_index = int(np.floor(current_position))
-        if current_station_index + 1 < len(self.route_id):
-            next_station_index = current_station_index + 1
-        if next_station_index < len(self.route_id):
-            current_station_pos = self.node_pos[self.route_id[current_station_index]]
-            next_station_pos = self.node_pos[self.route_id[next_station_index]]
-            interp_ratio = current_position - current_station_index
-            interp_pos = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(next_station_pos)
-            ax.plot(*interp_pos, 'ro', markersize=12) 
-        self.update_graph(next_station_index)
-        self.stations_title(ax, current_station_index)
+        for i in range(len(self.traces)):
+            current_time = (frame_number / FRAMES) * self.travels_times_sum()[i]
+            current_position = self.total_travels_times()[i](current_time)
+            current_station_index = int(np.floor(current_position))
+            if current_station_index + 1 < len(self.routes_id[i]):
+                next_station_index = current_station_index + 1
+            if next_station_index < len(self.routes_id[i]):
+                current_station_pos = self.node_pos[self.routes_id[i][current_station_index]]
+                next_station_pos = self.node_pos[self.routes_id[i][next_station_index]]
+                interp_ratio = current_position - current_station_index
+                interp_pos = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(next_station_pos)
+                ax.plot(*interp_pos, 'ro', markersize=12) 
+            self.update_graph(next_station_index)
+            # self.stations_title(ax, current_station_index)
 
     def create_anim(self) -> FuncAnimation:
-        interval_ms = (self.travel_time_sum() / FRAMES) * 1000
+        interval_ms = (max(self.travels_times_sum()) / FRAMES) * 1000
         animation = FuncAnimation(self.fig, self.interp_func, fargs=(self.ax,),
                                 frames=FRAMES, interval=interval_ms, repeat=False)
         return animation
 
 
-def load_data() -> tuple[DataFrame, DataFrame, DataFrame, DataFrame]:
+def load_data() -> tuple[DataFrame, DataFrame, list[DataFrame]]:
     stops = pd.read_csv('inputs/stops.txt')
     stop_times = pd.read_csv('inputs/stop_times.txt')
-    trips = pd.read_csv('inputs/trips.txt')
-    trace = pd.read_csv('traces/wroclaw_warsaw.csv')
-    return stops, stop_times, trips, trace
+    traces = [pd.read_csv('traces/wroclaw_warsaw.csv'),
+              pd.read_csv('traces/katowice_poznan.csv')]
+    return stops, stop_times, traces
 
 def save_anim(animation: FuncAnimation) -> None:
     animation.save('outputs/train_anim.gif', writer='imagemagick', fps=30)
