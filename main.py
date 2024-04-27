@@ -27,10 +27,11 @@ class TrainSimulation:
         self.routes_id = self.trains_paths()
         self.node_pos = self.node_postion()
         self.fig, self.ax = self.create_graph()
-        self.station_occupancy = defaultdict(lambda: None)  # Tracks which train is at each station
+        self.station_occupancy = defaultdict(lambda: None)  
         self.total_frames = [FRAMES * (self.travels_times_sum()[i] / max(self.travels_times_sum())) for i, _ in enumerate(self.traces)]
-        self.total_paused_time = [0] * len(self.traces)  # Track paused time for each trace
-        self.total_paused_frames = [0 for _ in range(len(self.traces))]  # Initialize paused frames
+        self.total_paused_time = [0] * len(self.traces)  
+        self.paused_time = {i: 0 for i in range(len(self.traces))}  
+        self.paused_positions = {i: None for i in range(len(self.traces))}  
 
     def transform_data(self) -> tuple[DataFrame, DataFrame]:
         stops = self.stops[['stop_id', 'stop_name',
@@ -107,60 +108,44 @@ class TrainSimulation:
         nx.draw_networkx_edges(self.G, self.node_pos,
                             edgelist=route_edges,
                             edge_color=TRAVEL_COLOR, width=2)
-    # def stations_title(self, ax: Any, curr_station_index: int) -> None:
-    #     for i in range(len(self.traces)):
-    #         label_key = self.routes_id[i][curr_station_index]
-    #         label_value = self.routes_stations[i][curr_station_index]
-    #         labels = {label_key: label_value}
-    #         nx.draw_networkx_labels(self.G, self.node_pos,
-    #                                 labels=labels, font_color=FONT_COLOR)
-    #         ax.set_title(f"Animacja podróży pociągów")
-    #         plt.axis('off')
 
     def interp_func(self, frame_number, ax):
         ax.clear()
         nx.draw(self.G, self.node_pos, ax=ax, node_size=20,
                 alpha=0.3, node_color=NODE_COLOR, edge_color=EDGE_COLOR)
-        
         for i, trace in enumerate(self.traces):
             total_frames = FRAMES * (self.travels_times_sum()[i] / max(self.travels_times_sum()))
             
             if frame_number <= total_frames:
-                if not hasattr(trace, 'paused_time'):
-                    trace.paused_time = 0  # Initialize paused time if not exist
-
-                current_time = (frame_number / total_frames) * self.travels_times_sum()[i] - trace.paused_time
+                current_time = (frame_number / total_frames) * self.travels_times_sum()[i] - self.paused_time[i]
                 current_position = self.total_travels_times()[i](current_time)
             else:
                 current_position = len(self.routes_id[i]) - 1 
-
             current_station_index = int(np.floor(current_position))
             next_station_index = current_station_index + 1 if current_station_index + 1 < len(self.routes_id[i]) else current_station_index
-
             current_station_pos = self.node_pos[self.routes_id[i][current_station_index]]
             if next_station_index < len(self.routes_id[i]):
                 current_train_at_station = self.station_occupancy[self.routes_id[i][next_station_index]]
                 if current_train_at_station is not None and current_train_at_station != i:
-                    # Station is occupied, keep drawing the current station position
-                    ax.plot(*current_station_pos, 'ro', markersize=12)
-                    trace.paused_time += (1 / total_frames) * self.travels_times_sum()[i]  # Increment paused time
-                    continue  # Skip moving this train
+                    if self.paused_positions[i] is None:
+                        interp_ratio = current_position - current_station_index
+                        self.paused_positions[i] = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(self.node_pos[self.routes_id[i][next_station_index]])
+                    ax.plot(*self.paused_positions[i], 'ro', markersize=12)
+                    self.paused_time[i] += (1 / total_frames) * self.travels_times_sum()[i]
+                    continue  
+                self.paused_positions[i] = None  
 
+            if next_station_index < len(self.routes_id[i]):
                 next_station_pos = self.node_pos[self.routes_id[i][next_station_index]]
                 interp_ratio = current_position - current_station_index
                 interp_pos = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(next_station_pos)
                 ax.plot(*interp_pos, 'ro', markersize=12)
             else:
-                # Draw the last position if the train has no next station
                 ax.plot(*current_station_pos, 'ro', markersize=12)
-            
+        
             self.update_graph(next_station_index, self.routes_id[i])
-
-            # Free the previous station when the train moves
             if current_station_index > 0 and next_station_index != current_station_index:
                 self.station_occupancy[self.routes_id[i][current_station_index - 1]] = None
-            
-            # Update station occupancy
             self.station_occupancy[self.routes_id[i][current_station_index]] = i
 
     def create_anim(self) -> FuncAnimation:
