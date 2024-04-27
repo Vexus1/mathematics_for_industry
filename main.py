@@ -10,6 +10,7 @@ from pandas import DataFrame
 from scipy.interpolate import interp1d
 from matplotlib.animation import FuncAnimation
 from typing import Any
+from collections import defaultdict
 
 from constants import *
 
@@ -26,6 +27,10 @@ class TrainSimulation:
         self.routes_id = self.trains_paths()
         self.node_pos = self.node_postion()
         self.fig, self.ax = self.create_graph()
+        self.station_occupancy = defaultdict(lambda: None)  # Tracks which train is at each station
+        self.total_frames = [FRAMES * (self.travels_times_sum()[i] / max(self.travels_times_sum())) for i, _ in enumerate(self.traces)]
+        self.total_paused_time = [0] * len(self.traces)  # Track paused time for each trace
+        self.total_paused_frames = [0 for _ in range(len(self.traces))]  # Initialize paused frames
 
     def transform_data(self) -> tuple[DataFrame, DataFrame]:
         stops = self.stops[['stop_id', 'stop_name',
@@ -112,15 +117,19 @@ class TrainSimulation:
     #         ax.set_title(f"Animacja podróży pociągów")
     #         plt.axis('off')
 
-    def interp_func(self, frame_number: int, ax: Any) -> None:
+    def interp_func(self, frame_number, ax):
         ax.clear()
         nx.draw(self.G, self.node_pos, ax=ax, node_size=20,
                 alpha=0.3, node_color=NODE_COLOR, edge_color=EDGE_COLOR)
-
+        
         for i, trace in enumerate(self.traces):
             total_frames = FRAMES * (self.travels_times_sum()[i] / max(self.travels_times_sum()))
+            
             if frame_number <= total_frames:
-                current_time = (frame_number / total_frames) * self.travels_times_sum()[i]
+                if not hasattr(trace, 'paused_time'):
+                    trace.paused_time = 0  # Initialize paused time if not exist
+
+                current_time = (frame_number / total_frames) * self.travels_times_sum()[i] - trace.paused_time
                 current_position = self.total_travels_times()[i](current_time)
             else:
                 current_position = len(self.routes_id[i]) - 1 
@@ -130,16 +139,33 @@ class TrainSimulation:
 
             current_station_pos = self.node_pos[self.routes_id[i][current_station_index]]
             if next_station_index < len(self.routes_id[i]):
+                current_train_at_station = self.station_occupancy[self.routes_id[i][next_station_index]]
+                if current_train_at_station is not None and current_train_at_station != i:
+                    # Station is occupied, keep drawing the current station position
+                    ax.plot(*current_station_pos, 'ro', markersize=12)
+                    trace.paused_time += (1 / total_frames) * self.travels_times_sum()[i]  # Increment paused time
+                    continue  # Skip moving this train
+
                 next_station_pos = self.node_pos[self.routes_id[i][next_station_index]]
                 interp_ratio = current_position - current_station_index
                 interp_pos = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(next_station_pos)
                 ax.plot(*interp_pos, 'ro', markersize=12)
             else:
-                ax.plot(*current_station_pos, 'ro', markersize=12)  
-            self.update_graph(next_station_index, self.routes_id[i])  
+                # Draw the last position if the train has no next station
+                ax.plot(*current_station_pos, 'ro', markersize=12)
+            
+            self.update_graph(next_station_index, self.routes_id[i])
+
+            # Free the previous station when the train moves
+            if current_station_index > 0 and next_station_index != current_station_index:
+                self.station_occupancy[self.routes_id[i][current_station_index - 1]] = None
+            
+            # Update station occupancy
+            self.station_occupancy[self.routes_id[i][current_station_index]] = i
 
     def create_anim(self) -> FuncAnimation:
-        interval_ms = (max(self.travels_times_sum()) / FRAMES) * 1000
+        max_total_time = max(self.travels_times_sum()[i] + self.total_paused_time[i] for i in range(len(self.traces)))
+        interval_ms = (max_total_time / max(self.total_frames)) * 1000
         animation = FuncAnimation(self.fig, self.interp_func, fargs=(self.ax,),
                                 frames=FRAMES, interval=interval_ms, repeat=False)
         return animation
