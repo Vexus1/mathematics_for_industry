@@ -96,14 +96,12 @@ class TrainSimulation:
                 alpha=0.3, node_color=NODE_COLOR, edge_color=EDGE_COLOR)
         return fig, ax
     
-    def update_graph(self, next_station_index: int) -> None:
-        for i in range(len(self.traces)):
-            route_path = self.routes_id[i][:next_station_index + 1]
-            route_edges = list(zip(route_path[:-1], route_path[1:]))
-            nx.draw_networkx_edges(self.G, self.node_pos, 
-                                edgelist=route_edges,
-                                edge_color=TRAVEL_COLOR, width=2)
-
+    def update_graph(self, next_station_index: int, route_id: list) -> None:
+        route_path = route_id[:next_station_index + 1]
+        route_edges = list(zip(route_path[:-1], route_path[1:]))
+        nx.draw_networkx_edges(self.G, self.node_pos,
+                            edgelist=route_edges,
+                            edge_color=TRAVEL_COLOR, width=2)
     # def stations_title(self, ax: Any, curr_station_index: int) -> None:
     #     for i in range(len(self.traces)):
     #         label_key = self.routes_id[i][curr_station_index]
@@ -115,23 +113,30 @@ class TrainSimulation:
     #         plt.axis('off')
 
     def interp_func(self, frame_number: int, ax: Any) -> None:
-        ax.clear() 
+        ax.clear()
         nx.draw(self.G, self.node_pos, ax=ax, node_size=20,
-                alpha=0.3, node_color=NODE_COLOR, edge_color=EDGE_COLOR) 
-        for i in range(len(self.traces)):
-            current_time = (frame_number / FRAMES) * self.travels_times_sum()[i]
-            current_position = self.total_travels_times()[i](current_time)
+                alpha=0.3, node_color=NODE_COLOR, edge_color=EDGE_COLOR)
+
+        for i, trace in enumerate(self.traces):
+            total_frames = FRAMES * (self.travels_times_sum()[i] / max(self.travels_times_sum()))
+            if frame_number <= total_frames:
+                current_time = (frame_number / total_frames) * self.travels_times_sum()[i]
+                current_position = self.total_travels_times()[i](current_time)
+            else:
+                current_position = len(self.routes_id[i]) - 1 
+
             current_station_index = int(np.floor(current_position))
-            if current_station_index + 1 < len(self.routes_id[i]):
-                next_station_index = current_station_index + 1
+            next_station_index = current_station_index + 1 if current_station_index + 1 < len(self.routes_id[i]) else current_station_index
+
+            current_station_pos = self.node_pos[self.routes_id[i][current_station_index]]
             if next_station_index < len(self.routes_id[i]):
-                current_station_pos = self.node_pos[self.routes_id[i][current_station_index]]
                 next_station_pos = self.node_pos[self.routes_id[i][next_station_index]]
                 interp_ratio = current_position - current_station_index
                 interp_pos = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(next_station_pos)
-                ax.plot(*interp_pos, 'ro', markersize=12) 
-            self.update_graph(next_station_index)
-            # self.stations_title(ax, current_station_index)
+                ax.plot(*interp_pos, 'ro', markersize=12)
+            else:
+                ax.plot(*current_station_pos, 'ro', markersize=12)  
+            self.update_graph(next_station_index, self.routes_id[i])  
 
     def create_anim(self) -> FuncAnimation:
         interval_ms = (max(self.travels_times_sum()) / FRAMES) * 1000
