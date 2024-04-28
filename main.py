@@ -31,7 +31,10 @@ class TrainSimulation:
         self.total_frames = [FRAMES * (self.travels_times_sum()[i] / max(self.travels_times_sum())) for i, _ in enumerate(self.traces)]
         self.total_paused_time = [0] * len(self.traces)  
         self.paused_time = {i: 0 for i in range(len(self.traces))}  
-        self.paused_positions = {i: None for i in range(len(self.traces))}  
+        self.paused_positions = {i: None for i in range(len(self.traces))} 
+        self.what_edge = [None, None, None]
+        self.current_positions = [0, 0, 0]
+        self.max_frames = FRAMES
 
     def transform_data(self) -> tuple[DataFrame, DataFrame]:
         stops = self.stops[['stop_id', 'stop_name',
@@ -115,34 +118,45 @@ class TrainSimulation:
                 alpha=0.3, node_color=NODE_COLOR, edge_color=EDGE_COLOR)
         for i in range(len(self.traces)):
             adjusted_total_time = self.travels_times_sum()[i] + self.paused_time[i]
-            adjusted_total_frames = FRAMES * (adjusted_total_time / max(self.travels_times_sum()[j] + self.paused_time[j] for j in range(len(self.traces))))
+            adjusted_total_frames = FRAMES * (adjusted_total_time / max(self.travels_times_sum()[j] for j in range(len(self.traces))))
+            if adjusted_total_frames > self.max_frames:
+                self.max_frames = int(adjusted_total_frames)+1
             if frame_number <= adjusted_total_frames:
-                current_time = (frame_number / adjusted_total_frames) * adjusted_total_time - self.paused_time[i]
-                current_position = self.total_travels_times()[i](current_time)
+                if self.paused_positions[i] is None:
+                    current_time = (frame_number / adjusted_total_frames) * adjusted_total_time - self.paused_time[i]
+                    current_position = self.total_travels_times()[i](current_time)
+                    self.current_positions[i] = current_position
             else:
-                current_position = len(self.routes_id[i]) - 1 
+                current_position = len(self.routes_id[i]) - 1
+                self.current_positions[i] = current_position
+            #if i == 0:
+            #    print(self.current_positions[i])
 
-            current_station_index = int(np.floor(current_position))
+            current_station_index = int(np.floor(self.current_positions[i]))
             current_station_index = min(current_station_index, len(self.routes_id[i]) - 1)
             if current_station_index + 1 < len(self.routes_id[i]):
                 next_station_index = current_station_index + 1
             else:
                 next_station_index = current_station_index
+            #print(i, self.routes_id[i][current_station_index], self.routes_id[i][next_station_index])
             current_station_pos = self.node_pos[self.routes_id[i][current_station_index]]
+            # sprawdza czy pociąg dojechał
             if next_station_index < len(self.routes_id[i]):
                 current_train_at_station = self.station_occupancy[self.routes_id[i][next_station_index]]
-                if current_train_at_station is not None and current_train_at_station != i:
+                if (self.routes_id[i][current_station_index], self.routes_id[i][next_station_index]) in [self.what_edge[j] for j in range(len(self.what_edge)) if j != i]:
+                    self.what_edge[i] = None
                     if self.paused_positions[i] is None:  
-                        interp_ratio = current_position - current_station_index
+                        interp_ratio = self.current_positions[i] - current_station_index
                         self.paused_positions[i] = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(self.node_pos[self.routes_id[i][next_station_index]])
                     ax.plot(*self.paused_positions[i], 'ro', markersize=12)
-                    self.paused_time[i] += 1 / adjusted_total_frames * adjusted_total_time  
+                    self.paused_time[i] += 1 / adjusted_total_frames * adjusted_total_time
                     continue
+            self.what_edge[i] = (self.routes_id[i][current_station_index], self.routes_id[i][next_station_index])
 
             self.paused_positions[i] = None 
             if next_station_index < len(self.routes_id[i]):
                 next_station_pos = self.node_pos[self.routes_id[i][next_station_index]]
-                interp_ratio = current_position - current_station_index
+                interp_ratio = self.current_positions[i] - current_station_index
                 interp_pos = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(next_station_pos)
                 ax.plot(*interp_pos, 'ro', markersize=12)
             else:
@@ -153,19 +167,22 @@ class TrainSimulation:
                 self.station_occupancy[self.routes_id[i][current_station_index - 1]] = None
             self.station_occupancy[self.routes_id[i][current_station_index]] = i
 
+
     def create_anim(self) -> FuncAnimation:
         max_total_time = max(self.travels_times_sum()[i] + self.total_paused_time[i] for i in range(len(self.traces)))
         interval_ms = (max_total_time / max(self.total_frames)) * 1000
         animation = FuncAnimation(self.fig, self.interp_func, fargs=(self.ax,),
-                                frames=FRAMES, interval=interval_ms, repeat=False)
+                                frames=int(FRAMES*3/2), interval=interval_ms, repeat=False)
         return animation
 
 
 def load_data() -> tuple[DataFrame, DataFrame, list[DataFrame]]:
-    stops = pd.read_csv('inputs/stops.txt')
-    stop_times = pd.read_csv('inputs/stop_times.txt')
-    traces = [pd.read_csv('traces/wroclaw_warsaw.csv'),
-              pd.read_csv('traces/katowice_poznan.csv')]
+    stops = pd.read_csv('inputs/stops0.txt')
+    stop_times = pd.read_csv('inputs/stop_times0.txt')
+    traces = [pd.read_csv('traces/CH.csv'),
+              #pd.read_csv('traces/katowice_poznan.csv')]
+              pd.read_csv('traces/AF.csv'),
+              pd.read_csv('traces/BG.csv')]
     return stops, stop_times, traces
 
 def save_anim(animation: FuncAnimation) -> None:
@@ -175,3 +192,6 @@ if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     train_simulation = TrainSimulation(*load_data())
     save_anim(train_simulation.create_anim())
+    print(train_simulation.max_frames)
+
+

@@ -4,5 +4,5 @@ TRAIN_COLOR = 'red'
 ROUTE_COLOR = 'green'
 FONT_COLOR = "black"
 TRAVEL_COLOR = "green"
-FRAMES = 500
+FRAMES = 250
 DELAY = 1000
