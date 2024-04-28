@@ -109,14 +109,13 @@ class TrainSimulation:
                             edgelist=route_edges,
                             edge_color=TRAVEL_COLOR, width=2)
 
-    def interp_func(self, frame_number, ax):
+    def interp_func(self, frame_number: int, ax: Any) -> None:
         ax.clear()
         nx.draw(self.G, self.node_pos, ax=ax, node_size=20,
                 alpha=0.3, node_color=NODE_COLOR, edge_color=EDGE_COLOR)
         for i in range(len(self.traces)):
             adjusted_total_time = self.travels_times_sum()[i] + self.paused_time[i]
-            adjusted_total_frames = FRAMES * (adjusted_total_time / max(self.travels_times_sum()[j]
-                                                                         + self.paused_time[j] for j in range(len(self.traces))))
+            adjusted_total_frames = FRAMES * (adjusted_total_time / max(self.travels_times_sum()[j] + self.paused_time[j] for j in range(len(self.traces))))
             if frame_number <= adjusted_total_frames:
                 current_time = (frame_number / adjusted_total_frames) * adjusted_total_time - self.paused_time[i]
                 current_position = self.total_travels_times()[i](current_time)
@@ -135,8 +134,7 @@ class TrainSimulation:
                 if current_train_at_station is not None and current_train_at_station != i:
                     if self.paused_positions[i] is None:  
                         interp_ratio = current_position - current_station_index
-                        self.paused_positions[i] = (1 - interp_ratio) * np.array(current_station_pos)
-                        + interp_ratio * np.array(self.node_pos[self.routes_id[i][next_station_index]])
+                        self.paused_positions[i] = (1 - interp_ratio) * np.array(current_station_pos) + interp_ratio * np.array(self.node_pos[self.routes_id[i][next_station_index]])
                     ax.plot(*self.paused_positions[i], 'ro', markersize=12)
                     self.paused_time[i] += 1 / adjusted_total_frames * adjusted_total_time  
                     continue
