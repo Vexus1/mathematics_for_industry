@@ -1,7 +1,12 @@
-from station_graph import *
+from dataclasses import dataclass
+
+from station_graph import StationGraph # warning: circular import 
 from constants import TRAVEL_COLOR
 
-class InterpolationFunc(StationGraph):
+@dataclass
+class InterpolationFunc():
+    station_graph: StationGraph
+
     def __post_init__(self):
         # super().__init__(self.G, self.node_pos, self.fig,
         #                   self.ax, self.routes_id)

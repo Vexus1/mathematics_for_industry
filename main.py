@@ -23,6 +23,6 @@ def save_anim(animation: InterpolationFunc) -> None:
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     stops, stop_times, traces = load_data()
-    StationGraph(stops, stop_times, traces)
-    train_simulation = InterpolationFunc()
+    station_grap = StationGraph(stops, stop_times, traces)
+    train_simulation = InterpolationFunc(station_grap)
     # save_anim(train_simulation)
