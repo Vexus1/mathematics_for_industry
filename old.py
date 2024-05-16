@@ -9,6 +9,7 @@ from icecream import ic
 from pandas import DataFrame
 from scipy.interpolate import interp1d
 from matplotlib.animation import FuncAnimation
+from matplotlib.pyplot import Axes
 from typing import Any
 from collections import defaultdict
 
@@ -95,7 +96,7 @@ class TrainSimulation:
             total.append(time_to_distance)
         return total
 
-    def create_graph(self) -> tuple[plt.Figure, Any]:
+    def create_graph(self) -> tuple[plt.Figure, Axes]:
         fig, ax = plt.subplots(figsize=(10, 8))
         ax.clear()
         nx.draw(self.G, self.node_pos, ax=ax, node_size=20,
@@ -169,7 +170,7 @@ def load_data() -> tuple[DataFrame, DataFrame, list[DataFrame]]:
     return stops, stop_times, traces
 
 def save_anim(animation: FuncAnimation) -> None:
-    animation.save('outputs/train_anim.gif', writer='imagemagick', fps=30)
+    animation.save('outputs/old_train_anim.gif', writer='imagemagick', fps=30)
 
 if __name__ == '__main__':
     os.chdir(os.path.dirname(os.path.abspath(__file__)))

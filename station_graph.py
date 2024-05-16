@@ -8,7 +8,7 @@ from pandas import DataFrame
 from icecream import ic
 from typing import Any
 from matplotlib.pyplot import Figure
-from scipy.interpolate import interp1d
+from matplotlib.pyplot import Axes
 
 from constants import NODE_COLOR, EDGE_COLOR
 
@@ -27,6 +27,9 @@ class StationGraph:
         self.fig, self.ax = self.create_graph()
 
     def transform_data(self) -> tuple[DataFrame, DataFrame]:
+        """
+        Transforms the data about stops and stop times into required formats.
+        """
         stops = self.stops[['stop_id', 'stop_name',
                             'stop_lat', 'stop_lon']]
         stop_times = self.stop_times.sort_values(
@@ -34,6 +37,9 @@ class StationGraph:
         return stops, stop_times
     
     def create_nodes(self) -> None:
+        """
+        Creates nodes and edges in the graph based on the processed data.
+        """
         stops, stop_times = self.transform_data()
         next_stop_id = stop_times.groupby('trip_id')['stop_id'].shift(-1)
         df_edges = stop_times[['trip_id', 'stop_id']].assign(
@@ -49,11 +55,22 @@ class StationGraph:
                 self.G.add_edge(edge[0], edge[1])
 
     def node_position(self) -> dict[Any, tuple]:
+        """
+        Determines the positions of nodes in the graph.
+        Returns:
+            dict: A dictionary of node positions.
+        """
         position = {node: (data['pos'][0], data['pos'][1])
                     for node, data in self.G.nodes(data=True)}
         return position
     
-    def create_graph(self) -> tuple[Figure, Any]:
+    def create_graph(self) -> tuple[Figure, Axes]:
+        """
+        Creates a visualization of the graph.
+        Returns:
+            tuple: Returns a matplotlib figure and 
+            axis object representing the graph.
+        """
         fig, ax = plt.subplots(figsize=(10, 8))
         ax.clear()
         nx.draw(self.G, self.node_pos, ax=ax, node_size=20,
@@ -61,6 +78,12 @@ class StationGraph:
         return fig, ax
 
     def train_paths(self) -> list[list[np.int64]]:
+        """
+        Computes the IDs of the stations for each route.
+        Returns:
+            list: A list of lists containing station IDs
+            for each route based on station names.
+        """
         routes_id = []
         for route in self.route_stations:
             route_id = []
@@ -71,6 +94,11 @@ class StationGraph:
         return routes_id
     
     def travels_times(self) -> list[list[int]]:
+        """
+        Extracts the travel times for each route from the trace data.
+        Returns:
+            list: A list of travel times lists, extracted from the trace data.
+        """
         times = []
         for trace in self.traces:
             real_time = trace[trace['Travel Time'] != 0]
@@ -79,18 +107,12 @@ class StationGraph:
         return times
     
     def travels_times_sum(self) -> list[int]:
+        """
+        Calculates the sum of travel times for each route.
+        Returns:
+            list: A list of summed travel times for each route.
+        """
         return [sum(travel) for travel in self.travels_times()]
 
-    def total_travels_times(self) -> list[interp1d]:
-        total = []
-        for i in range(len(self.traces)):
-            time_points = np.cumsum([0] + self.travels_times()[i])
-            distance_points = np.arange(len(self.routes_id[i]))
-            time_to_distance = interp1d(time_points, distance_points,
-                                        bounds_error=False,
-                                        fill_value="extrapolate")
-            total.append(time_to_distance)
-        return total
-    
     def trace_names(self) -> list[list[str]]:
         return [trace['Station Name'].tolist() for trace in self.traces]
